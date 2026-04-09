@@ -10,7 +10,7 @@ pub enum EventResult {
     Quit,
     Reload,
     OpenSelected,
-    SaveEditor(EditorState),
+    SaveEditor(Box<EditorState>),
     ConfirmDelete,
 }
 
@@ -115,7 +115,7 @@ fn handle_editor_mode(app: &mut App, key: KeyEvent) -> EventResult {
             EventResult::None
         }
         KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            EventResult::SaveEditor(editor.clone())
+            EventResult::SaveEditor(Box::new(editor.clone()))
         }
         KeyCode::Char(ch) => {
             editor.insert_char(ch);

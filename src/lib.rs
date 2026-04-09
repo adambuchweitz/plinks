@@ -71,10 +71,10 @@ fn run_list(args: ListArgs, cwd: &Path, out: &mut dyn Write) -> Result<()> {
 
     let mut rows = Vec::new();
     for (primary, entry) in &document.config.links {
-        if let Some(tag) = &filter_tag {
-            if !entry.tags.iter().any(|candidate| candidate == tag) {
-                continue;
-            }
+        if let Some(tag) = &filter_tag
+            && !entry.tags.iter().any(|candidate| candidate == tag)
+        {
+            continue;
         }
 
         rows.push(vec![

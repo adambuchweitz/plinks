@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      tag: ${{ steps.validate.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag points to origin/main
+        shell: bash
+        run: |
+          git fetch origin main --depth=1
+
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "error: release tags must point to a commit already on main" >&2
+            exit 1
+          fi
+
+      - id: validate
+        name: Validate tag matches Cargo.toml version
+        shell: bash
+        run: |
+          version="$(
+            python3 - <<'PY'
+            import pathlib
+            import tomllib
+
+            cargo_toml = pathlib.Path("Cargo.toml").read_text()
+            print(tomllib.loads(cargo_toml)["package"]["version"])
+            PY
+          )"
+          tag="${GITHUB_REF_NAME}"
+          expected_tag="v${version}"
+
+          if [[ "${tag}" != "${expected_tag}" ]]; then
+            echo "error: pushed tag ${tag} does not match Cargo.toml version ${version}" >&2
+            exit 1
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: preflight
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Restore Cargo cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Smoke test binary on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: .\target\${{ matrix.target }}\release\plinks.exe --help
+
+      - name: Smoke test binary on Unix
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: ./target/${{ matrix.target }}/release/plinks --help
+
+      - id: package_windows
+        name: Package Windows artifact
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.preflight.outputs.version }}"
+          $target = "${{ matrix.target }}"
+          $assetName = "plinks-v$version-$target.zip"
+          $stage = Join-Path $env:RUNNER_TEMP "package-$target"
+
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "target/$target/release/plinks.exe" (Join-Path $stage "plinks.exe")
+
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $assetName -Force
+
+      - id: package_unix
+        name: Package Unix artifact
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          version="${{ needs.preflight.outputs.version }}"
+          target="${{ matrix.target }}"
+          asset_name="plinks-v${version}-${target}.tar.gz"
+          stage="${RUNNER_TEMP}/package-${target}"
+
+          mkdir -p "${stage}"
+          cp "target/${target}/release/plinks" "${stage}/plinks"
+
+          tar -C "${stage}" -czf "${asset_name}" plinks
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            plinks-v${{ needs.preflight.outputs.version }}-${{ matrix.target }}.zip
+            plinks-v${{ needs.preflight.outputs.version }}-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+
+  checksums:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd dist
+          find . -maxdepth 1 -type f \( -name 'plinks-v*.zip' -o -name 'plinks-v*.tar.gz' \) -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS
+
+      - name: Upload SHA256SUMS
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sha256sums
+          path: dist/SHA256SUMS
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - preflight
+      - checksums
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Download SHA256SUMS
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: sha256sums
+          path: dist
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
+        with:
+          tag_name: ${{ needs.preflight.outputs.tag }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/plinks-v*.zip
+            dist/plinks-v*.tar.gz
+            dist/SHA256SUMS
