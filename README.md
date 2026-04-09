@@ -11,6 +11,16 @@
 
 ## Install
 
+Prebuilt binaries are published on GitHub Releases for these targets:
+
+- `x86_64-pc-windows-msvc`
+- `x86_64-unknown-linux-gnu`
+- `x86_64-apple-darwin`
+
+Each asset is target-specific. Windows, Linux, and macOS binaries are not interchangeable.
+
+Windows releases are unsigned portable `.zip` archives containing `plinks.exe`. Linux and macOS releases are `.tar.gz` archives containing `plinks`. Depending on local policy, Windows may show SmartScreen or other trust warnings before first launch.
+
 Build from source:
 
 ```bash
@@ -104,6 +114,25 @@ Test:
 ```bash
 cargo test
 ```
+
+## Releases
+
+GitHub Releases publish prebuilt binaries for Windows, Linux, and macOS. Release assets are named as stable target-specific archives:
+
+- `plinks-v<version>-x86_64-pc-windows-msvc.zip`
+- `plinks-v<version>-x86_64-unknown-linux-gnu.tar.gz`
+- `plinks-v<version>-x86_64-apple-darwin.tar.gz`
+
+Every release also includes a `SHA256SUMS` file covering all published archives.
+
+## Maintainer Release Process
+
+1. Bump the crate version in `Cargo.toml`.
+2. Merge the release commit to `main`.
+3. Create and push a matching Git tag in the form `vX.Y.Z`.
+4. GitHub Actions validates that the tag matches `Cargo.toml`, builds the release binaries, runs `--help` smoke tests for each release target, generates `SHA256SUMS`, and publishes the release assets automatically.
+
+Arch packaging remains a separate distribution path and is still generated with `./scripts/build-arch-package.sh`.
 
 ## Arch Linux Packaging
 
