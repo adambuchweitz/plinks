@@ -1,0 +1,8 @@
+version = 1
+
+[links]
+
+[links.github]
+url = "https://github.com/AdamBuchweitz/plinks"
+aliases = ["gh", "git"]
+tags = ["git"]
