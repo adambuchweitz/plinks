@@ -39,7 +39,14 @@ archive_path="${output_dir}/${archive_name}"
 pkgbuild_path="${output_dir}/PKGBUILD"
 
 mkdir -p "${output_dir}"
-rm -f "${archive_path}" "${pkgbuild_path}"
+shopt -s nullglob
+old_packages=(
+  "${output_dir}/${package_name}-"*.pkg.tar*
+  "${output_dir}/${package_name}-debug-"*.pkg.tar*
+)
+shopt -u nullglob
+
+rm -f "${archive_path}" "${pkgbuild_path}" "${old_packages[@]}"
 
 git -C "${repo_root}" ls-files --cached --others --exclude-standard -z \
   | tar \
@@ -65,4 +72,4 @@ echo "Wrote ${pkgbuild_path}"
 echo
 echo "Next steps:"
 echo "  cd ${output_dir}"
-echo "  makepkg -f"
+echo "  makepkg -Csi"
