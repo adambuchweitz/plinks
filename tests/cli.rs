@@ -64,6 +64,13 @@ fn help_output(args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+fn command_output(args: &[&str]) -> std::process::Output {
+    ProcessCommand::new(env!("CARGO_BIN_EXE_plinks"))
+        .args(args)
+        .output()
+        .unwrap()
+}
+
 #[test]
 fn add_creates_file_when_absent() {
     let temp = TempDir::new().unwrap();
@@ -317,6 +324,8 @@ fn top_level_help_lists_command_summaries_and_examples() {
     let help = help_output(&["-h"]);
 
     assert!(help.contains("Manage shared project links from the command line or TUI"));
+    assert!(help.contains("-v"));
+    assert!(help.contains("--version"));
     assert!(help.contains("open"));
     assert!(help.contains("Open a saved link by primary name, alias, or tag"));
     assert!(help.contains("list"));
@@ -334,6 +343,24 @@ fn top_level_help_lists_command_summaries_and_examples() {
 fn no_args_defaults_to_manage_command() {
     let cli = Cli::parse_from(["plinks"]);
     assert!(cli.command.is_none());
+}
+
+#[test]
+fn version_flags_print_crate_version() {
+    for args in [&["--version"][..], &["-v"][..]] {
+        let output = command_output(args);
+        assert!(
+            output.status.success(),
+            "version command failed with status {}.\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert_eq!(stdout, format!("plinks {}\n", env!("CARGO_PKG_VERSION")));
+        assert!(output.stderr.is_empty());
+    }
 }
 
 #[test]
