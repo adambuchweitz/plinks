@@ -5,7 +5,7 @@ use clap::{ArgAction, ArgGroup, Args, Parser, Subcommand};
     name = "plinks",
     version,
     about = "Manage shared project links from the command line or TUI",
-    long_about = "Manage shared project links stored in project-links.toml.\n\nUse plinks to save docs, dashboards, tickets, and runbooks under stable project-local names so the whole repository can share them.",
+    long_about = "Manage shared project links stored in project-links.toml.\n\nUse plinks to save docs, dashboards, and tickets under stable project-local names so the whole repository can share them.",
     after_help = "Examples:\n  plinks add docs https://docs.rs --alias api --tag rust\n  plinks open docs\n  plinks open api\n  plinks open --tag rust\n  plinks list --tag rust\n  plinks manage\n\nUse `plinks help <command>` for command-specific examples."
 )]
 pub struct Cli {

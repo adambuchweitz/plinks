@@ -1,15 +1,112 @@
 # plinks
 
-`plinks` is a project-local link manager for repositories. It keeps shared links in a checked-in `project-links.toml` file so everyone on the project can open the same docs, dashboards, tickets, and runbooks from either a CLI or a `ratatui` interface.
+`plinks` is a project-local link manager. When used in a repository, check in `project-links.toml` so everyone on the team can open the same docs, dashboards, and tickets from either a CLI or an interactive `ratatui` TUI.
 
-## Why
+## Why you might want it
 
-- Keep useful project links in the repo instead of in browser bookmarks.
-- Open links by a stable short name or alias.
-- Group related links with tags.
-- Manage the file directly from the terminal with shell commands or an interactive TUI.
+- Keep useful or common links in the repo instead of in browser bookmarks.
+- Make onboarding easier (the same links for everyone, in the same place).
+- Avoid hunting through wikis, chat logs, and stale docs when you need the right dashboard or ticket board.
 
-## Build
+## Quick start
+
+1. Add a link from anywhere inside your repo:
+
+```bash
+plinks add git https://github.com/my-username/my-project
+plinks a slack https://my-org.slack.com --alias chat --tag comms # shorthand for "add"
+plinks a linear https://linear.app/my-org --alias pm --tag comms
+plinks a docs https://docs.rs --alias api --tag rust --tag reference --note "Rust API docs"
+```
+
+If `project-links.toml` doesn't exist yet, `plinks` creates it at your Git repository root (or in the current directory if you're not in a Git repo). Commit the file to share it with your team.
+
+2. Open links by name, alias, or tag:
+
+```bash
+plinks open docs
+plinks o api # shorthand for "open"
+plinks o --tag rust
+```
+
+3. List links:
+
+```bash
+plinks list
+plinks ls --tag rust # shorthand for "list"
+```
+
+4. Launch the interactive TUI:
+
+```bash
+plinks
+plinks manage # or explicitly
+```
+
+Run `plinks --help` to see all commands.
+
+## How `plinks` finds `project-links.toml`
+
+`plinks` looks for `project-links.toml` in the current directory first.
+
+If it does not find one, it checks ancestor directories up to the Git repository root:
+
+- If an ancestor already contains `project-links.toml`, that file is used.
+- If no file exists yet, `plinks` uses `<git-root>/project-links.toml`.
+- Outside a Git repository, it falls back to `<cwd>/project-links.toml`.
+
+This makes it practical to run `plinks` anywhere inside a repository while still keeping one shared config file at the project level.
+
+## Config format
+
+```toml
+[links]
+
+[links.docs]
+url = "https://docs.rs"
+aliases = ["api"]
+tags = ["reference", "rust"]
+note = "Rust API docs"
+
+[links.jira]
+url = "https://jira.example.com/browse/PROJ"
+tags = ["ops"]
+```
+
+Primary names, aliases, and tags are normalized when saved to lowercase and may contain letters, numbers, `_`, and `-`.
+
+## Install
+
+### Prebuilt binaries (GitHub Releases)
+
+Prebuilt binaries are published on GitHub Releases for these targets:
+
+- `x86_64-pc-windows-msvc`
+- `x86_64-unknown-linux-gnu`
+- `x86_64-apple-darwin`
+
+Windows releases are unsigned, so depending on local policy, Windows may show SmartScreen or other trust warnings before first launch.
+
+After downloading:
+
+- Unpack the archive and put `plinks`/`plinks.exe` somewhere on your `PATH`.
+- On macOS/Linux you may need `chmod +x plinks` after extracting.
+
+### From source (Cargo)
+
+Install the latest from this repo:
+
+```bash
+cargo install --git https://github.com/adambuchweitz/plinks
+```
+
+Or install from a local checkout:
+
+```bash
+cargo install --path .
+```
+
+## Development
 
 Build a development binary from the checkout:
 
@@ -34,111 +131,13 @@ Run the binary directly from the checkout:
 cargo run -- <command>
 ```
 
-Install from the local checkout into Cargo's bin directory:
-
-```bash
-cargo install --path .
-```
-
-## Install
-
-Prebuilt binaries are published on GitHub Releases for these targets:
-
-- `x86_64-pc-windows-msvc`
-- `x86_64-unknown-linux-gnu`
-- `x86_64-apple-darwin`
-
-Each asset is target-specific. Windows, Linux, and macOS binaries are not interchangeable.
-
-Windows releases are unsigned portable `.zip` archives containing `plinks.exe`, `LICENSE`, and `README.md`. Linux and macOS releases are `.tar.gz` archives containing `plinks`, `LICENSE`, and `README.md`. Depending on local policy, Windows may show SmartScreen or other trust warnings before first launch.
-
-Get command help:
-
-```bash
-plinks --help
-plinks help add
-plinks open --help
-```
-
-## Usage
-
-Add a link:
-
-```bash
-plinks add docs https://docs.rs --alias api --tag rust --tag reference --note "Rust API docs"
-```
-
-List links:
-
-```bash
-plinks list
-plinks list --tag rust
-```
-
-Open a link by primary name or alias:
-
-```bash
-plinks open docs
-plinks open api
-```
-
-In `plinks add docs https://docs.rs`, `docs` is the link's primary name. The primary name is the stable project-local identifier used by commands like `plinks open docs` and `plinks remove docs`.
-
-Open every link with a tag:
-
-```bash
-plinks open --tag rust
-```
-
-Launch the interactive TUI:
-
-```bash
-plinks manage
-```
-
-## How `plinks` finds `project-links.toml`
-
-`plinks` looks for `project-links.toml` in the current directory first.
-
-If it does not find one, it checks ancestor directories up to the Git repository root:
-
-- If an ancestor already contains `project-links.toml`, that file is used.
-- If no file exists yet, `plinks` uses `<git-root>/project-links.toml`.
-- Outside a Git repository, it falls back to `<cwd>/project-links.toml`.
-
-This makes it practical to run `plinks` anywhere inside a repository while still keeping one shared config file at the project level.
-
-## Config format
-
-The config file format is schema version `1`:
-
-```toml
-version = 1
-
-[links]
-
-[links.docs]
-url = "https://docs.rs"
-aliases = ["api"]
-tags = ["reference", "rust"]
-note = "Rust API docs"
-
-[links.jira]
-url = "https://jira.example.com/browse/PROJ"
-tags = ["ops"]
-```
-
-Primary names, aliases, and tags are normalized to lowercase and may contain letters, numbers, `_`, and `-`.
-
-## Development
-
 Test:
 
 ```bash
 cargo test
 ```
 
-Install the repository Git hooks:
+Install the repository's Git hooks:
 
 ```bash
 ./scripts/install-git-hooks.sh
@@ -152,7 +151,7 @@ The pre-commit hook runs the same lint commands as CI:
 
 ## Releases
 
-GitHub Releases publish prebuilt binaries for Windows, Linux, and macOS. Release assets are named as stable target-specific archives:
+GitHub Releases publish prebuilt binaries for Windows, Linux, and macOS. Release assets are named using stable target-specific archives:
 
 - `plinks-v<version>-x86_64-pc-windows-msvc.zip`
 - `plinks-v<version>-x86_64-unknown-linux-gnu.tar.gz`
@@ -165,11 +164,15 @@ Every release also includes a `SHA256SUMS` file covering all published archives.
 1. Bump the crate version in `Cargo.toml` and refresh `Cargo.lock` so locked CI builds stay in sync.
 2. Merge the release commit to `main`.
 3. Create and push a matching Git tag in the form `vX.Y.Z`.
-4. GitHub Actions validates that the tag matches `Cargo.toml`, builds the release binaries, runs `--help` smoke tests for each release target, packages the binary together with `LICENSE` and `README.md`, generates `SHA256SUMS`, and publishes the release assets automatically.
+4. GitHub Actions handles the rest:
+    - Validates that the tag matches `Cargo.toml`
+    - Builds the release binaries
+    - Runs `--help` smoke tests for each release target
+    - Packages the binary together with `LICENSE` and `README.md`
+    - Generates `SHA256SUMS`
+    - Publishes the release assets automatically
 
-Arch packaging remains a separate distribution path and is still generated with `./scripts/build-arch-package.sh`.
-
-## Arch Linux Packaging
+## Arch Linux Packaging for AUR
 
 Build the Arch distribution artifacts:
 
@@ -177,7 +180,7 @@ Build the Arch distribution artifacts:
 ./scripts/build-arch-package.sh
 ```
 
-This writes the source tarball and `PKGBUILD` to `dist/arch/`. It is a packaging flow for Arch, separate from the normal Rust build in the `Build` section above.
+This writes the source tarball and `PKGBUILD` to `dist/arch/`.
 
 Build the package locally with `makepkg`:
 

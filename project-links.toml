@@ -3,6 +3,6 @@ version = 1
 [links]
 
 [links.github]
-url = "https://github.com/AdamBuchweitz/plinks"
+url = "https://github.com/adambuchweitz/plinks"
 aliases = ["gh", "git"]
 tags = ["git"]
