@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod clipboard;
 pub mod config;
 pub mod lookup;
 pub mod open_link;
@@ -11,12 +12,19 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use cli::{AddArgs, Cli, Command, ListArgs, OpenArgs, RemoveArgs};
+use clipboard::LinkClipboard;
 use config::{CandidateLink, Config, load_existing, write_config};
 use lookup::{links_for_tag, resolve_alias};
 use open_link::LinkOpener;
 use project_root::resolve_config_path;
 
-pub fn run(cli: Cli, cwd: &Path, opener: &dyn LinkOpener, out: &mut dyn Write) -> Result<()> {
+pub fn run(
+    cli: Cli,
+    cwd: &Path,
+    opener: &dyn LinkOpener,
+    clipboard: &dyn LinkClipboard,
+    out: &mut dyn Write,
+) -> Result<()> {
     match cli.command.unwrap_or(Command::Manage) {
         Command::Open(args) => run_open(args, cwd, opener),
         Command::List(args) => run_list(args, cwd, out),
@@ -24,7 +32,7 @@ pub fn run(cli: Cli, cwd: &Path, opener: &dyn LinkOpener, out: &mut dyn Write) -
         Command::Remove(args) => run_remove(args, cwd, out),
         Command::Manage => {
             let resolved = resolve_config_path(cwd)?;
-            tui::run(resolved, opener)
+            tui::run(resolved, opener, clipboard)
         }
     }
 }

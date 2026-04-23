@@ -6,6 +6,7 @@ use std::process::Command as ProcessCommand;
 use anyhow::Result;
 use clap::Parser;
 use plinks::cli::Cli;
+use plinks::clipboard::LinkClipboard;
 use plinks::config::Config;
 use plinks::open_link::LinkOpener;
 use tempfile::TempDir;
@@ -33,10 +34,20 @@ impl LinkOpener for RecordingOpener {
     }
 }
 
+#[derive(Default)]
+struct NoopClipboard;
+
+impl LinkClipboard for NoopClipboard {
+    fn copy_text(&self, _text: &str) -> Result<()> {
+        Ok(())
+    }
+}
+
 fn run(args: &[&str], cwd: &Path, opener: &RecordingOpener) -> Result<String> {
     let cli = Cli::parse_from(std::iter::once("plinks").chain(args.iter().copied()));
+    let clipboard = NoopClipboard;
     let mut stdout = Vec::new();
-    plinks::run(cli, cwd, opener, &mut stdout)?;
+    plinks::run(cli, cwd, opener, &clipboard, &mut stdout)?;
     Ok(String::from_utf8(stdout).unwrap())
 }
 
