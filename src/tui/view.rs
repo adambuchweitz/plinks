@@ -140,7 +140,9 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
         .split(area);
 
     let keys = match app.mode {
-        Mode::Normal => "q quit  j/k move  / filter  n new  e edit  d delete  o open  r reload",
+        Mode::Normal => {
+            "q quit  j/k move  / filter  n new  e edit  d delete  o open  y yank  r reload"
+        }
         Mode::Filter => "type to filter  Enter/Esc finish",
         Mode::Editor(_) => "Tab fields  Ctrl-s save  Esc cancel",
         Mode::DeleteConfirm => "y confirm delete  n cancel",

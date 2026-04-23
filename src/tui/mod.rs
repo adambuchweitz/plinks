@@ -16,6 +16,7 @@ use crossterm::terminal::{
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 
+use crate::clipboard::LinkClipboard;
 use crate::config::{Config, load_existing, write_config};
 use crate::open_link::LinkOpener;
 use crate::project_root::ResolvedConfigPath;
@@ -23,7 +24,11 @@ use crate::project_root::ResolvedConfigPath;
 use self::events::{EventResult, handle_key};
 use self::state::{App, Mode};
 
-pub fn run(resolved: ResolvedConfigPath, opener: &dyn LinkOpener) -> Result<()> {
+pub fn run(
+    resolved: ResolvedConfigPath,
+    opener: &dyn LinkOpener,
+    clipboard: &dyn LinkClipboard,
+) -> Result<()> {
     let loaded = load_or_default(&resolved)?;
     let mut app = App::new(loaded.config);
     let mut snapshot = loaded.raw;
@@ -34,7 +39,14 @@ pub fn run(resolved: ResolvedConfigPath, opener: &dyn LinkOpener) -> Result<()> 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = run_loop(&mut terminal, &resolved, opener, &mut app, &mut snapshot);
+    let result = run_loop(
+        &mut terminal,
+        &resolved,
+        opener,
+        clipboard,
+        &mut app,
+        &mut snapshot,
+    );
 
     disable_raw_mode().ok();
     execute!(terminal.backend_mut(), LeaveAlternateScreen).ok();
@@ -47,6 +59,7 @@ fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     resolved: &ResolvedConfigPath,
     opener: &dyn LinkOpener,
+    clipboard: &dyn LinkClipboard,
     app: &mut App,
     snapshot: &mut Option<String>,
 ) -> Result<()> {
@@ -67,16 +80,13 @@ fn run_loop(
                 reload_from_disk(app, resolved, snapshot)?;
             }
             EventResult::OpenSelected => {
-                if let Some(primary) = app.selected_primary() {
-                    if let Some(entry) = app.config.links.get(&primary) {
-                        if let Err(err) = opener.open(&entry.url) {
-                            app.set_error(err.to_string());
-                        } else {
-                            app.set_info(format!("Opened '{primary}'"));
-                        }
-                    }
-                } else {
-                    app.set_error("No link selected");
+                if let Err(err) = open_selected(app, opener) {
+                    app.set_error(err.to_string());
+                }
+            }
+            EventResult::YankSelected => {
+                if let Err(err) = yank_selected(app, clipboard) {
+                    app.set_error(err.to_string());
                 }
             }
             EventResult::SaveEditor(editor) => match editor.build_candidate() {
@@ -110,6 +120,30 @@ fn run_loop(
             }
         }
     }
+}
+
+fn open_selected(app: &mut App, opener: &dyn LinkOpener) -> Result<()> {
+    let primary = app.selected_primary().context("No link selected")?;
+    let entry = app
+        .config
+        .links
+        .get(&primary)
+        .with_context(|| format!("selected link '{primary}' no longer exists"))?;
+    opener.open(&entry.url)?;
+    app.set_info(format!("Opened '{primary}'"));
+    Ok(())
+}
+
+fn yank_selected(app: &mut App, clipboard: &dyn LinkClipboard) -> Result<()> {
+    let primary = app.selected_primary().context("No link selected")?;
+    let entry = app
+        .config
+        .links
+        .get(&primary)
+        .with_context(|| format!("selected link '{primary}' no longer exists"))?;
+    clipboard.copy_text(&entry.url)?;
+    app.set_info(format!("Copied URL for '{primary}'"));
+    Ok(())
 }
 
 fn load_or_default(resolved: &ResolvedConfigPath) -> Result<LoadedSnapshot> {
@@ -202,12 +236,51 @@ struct LoadedSnapshot {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::fs;
 
     use tempfile::TempDir;
 
     use super::*;
+    use crate::clipboard::LinkClipboard;
     use crate::config::CandidateLink;
+    use crate::open_link::LinkOpener;
+
+    #[derive(Default)]
+    struct RecordingClipboard {
+        copied: RefCell<Vec<String>>,
+    }
+
+    impl LinkClipboard for RecordingClipboard {
+        fn copy_text(&self, text: &str) -> Result<()> {
+            self.copied.borrow_mut().push(text.to_string());
+            Ok(())
+        }
+    }
+
+    impl RecordingClipboard {
+        fn copied(&self) -> Vec<String> {
+            self.copied.borrow().clone()
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingOpener {
+        opened: RefCell<Vec<String>>,
+    }
+
+    impl LinkOpener for RecordingOpener {
+        fn open(&self, url: &str) -> Result<()> {
+            self.opened.borrow_mut().push(url.to_string());
+            Ok(())
+        }
+    }
+
+    impl RecordingOpener {
+        fn opened(&self) -> Vec<String> {
+            self.opened.borrow().clone()
+        }
+    }
 
     #[test]
     fn save_conflict_reloads_on_disk_state() {
@@ -276,6 +349,64 @@ mod tests {
         assert_eq!(
             fs::read_to_string(&config_path).unwrap(),
             snapshot.clone().unwrap()
+        );
+    }
+
+    #[test]
+    fn yank_selected_copies_selected_url() {
+        let mut config = Config::default();
+        config
+            .save_link(
+                None,
+                CandidateLink::new(
+                    "docs".into(),
+                    "https://docs.rs".into(),
+                    vec![],
+                    vec![],
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let mut app = App::new(config);
+        let clipboard = RecordingClipboard::default();
+
+        yank_selected(&mut app, &clipboard).unwrap();
+
+        assert_eq!(clipboard.copied(), vec!["https://docs.rs".to_string()]);
+        assert_eq!(
+            app.status.as_ref().map(|status| status.text.as_str()),
+            Some("Copied URL for 'docs'")
+        );
+    }
+
+    #[test]
+    fn open_selected_opens_selected_url() {
+        let mut config = Config::default();
+        config
+            .save_link(
+                None,
+                CandidateLink::new(
+                    "docs".into(),
+                    "https://docs.rs".into(),
+                    vec![],
+                    vec![],
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let mut app = App::new(config);
+        let opener = RecordingOpener::default();
+
+        open_selected(&mut app, &opener).unwrap();
+
+        assert_eq!(opener.opened(), vec!["https://docs.rs".to_string()]);
+        assert_eq!(
+            app.status.as_ref().map(|status| status.text.as_str()),
+            Some("Opened 'docs'")
         );
     }
 }

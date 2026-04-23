@@ -10,6 +10,7 @@ pub enum EventResult {
     Quit,
     Reload,
     OpenSelected,
+    YankSelected,
     SaveEditor(Box<EditorState>),
     ConfirmDelete,
 }
@@ -61,6 +62,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) -> Result<EventResult> {
         }
         KeyCode::Char('r') => Ok(EventResult::Reload),
         KeyCode::Char('o') => Ok(EventResult::OpenSelected),
+        KeyCode::Char('y') => Ok(EventResult::YankSelected),
         _ => Ok(EventResult::None),
     }
 }
@@ -257,5 +259,15 @@ mod tests {
             panic!("expected editor mode");
         };
         assert_eq!(editor.active_field, Field::Url);
+    }
+
+    #[test]
+    fn yanks_selected_link_in_normal_mode() {
+        let mut app = sample_app();
+
+        assert_eq!(
+            handle_key(&mut app, key(KeyCode::Char('y'))).unwrap(),
+            EventResult::YankSelected
+        );
     }
 }

@@ -43,6 +43,9 @@ plinks
 plinks manage # or explicitly
 ```
 
+In the TUI, press `y` to copy the highlighted link to your system clipboard.
+On Linux, `plinks` uses `wl-copy`, `xclip`, or `xsel` so the copied URL persists after `plinks` exits. At least one of those utilities must be installed for `y` to work; otherwise the yank action fails with an error.
+
 Run `plinks --help` to see all commands.
 
 ## How `plinks` finds `project-links.toml`
